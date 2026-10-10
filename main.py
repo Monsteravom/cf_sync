@@ -1312,31 +1312,17 @@ def measure_bandwidth_curl(node_str):
         bytes=int(BANDWIDTH_SIZE_MB * 1024 * 1024)
     )
 
-    # 部分平台的 libcurl（尤其是 Windows 上的 Schannel 构建）不编译 HTTP/2 支持，
-    # 传入 --http2 会让 curl 以退出码 2 直接失败。这里先探测，不支持就省略。
-    supports_http2 = subprocess.run(["curl", "-V"], capture_output=True, text=True).stdout
-    if "HTTP2" not in supports_http2.upper():
-        print("当前 curl 不支持 HTTP/2，已自动移除 --http2 参数。")
-
     curl_cmd = [
         "curl", "-s", "-o", null_device,
         "-w", "%{size_download} %{time_starttransfer} %{time_total}",
         "-L",
         "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "--http2",
         "--noproxy", "*",
         "--resolve", f"speed.cloudflare.com:{port}:{ip}",
         "--connect-timeout", str(BANDWIDTH_CONNECT_TIMEOUT),
         "--max-time", str(BANDWIDTH_TIMEOUT),
-    ]
-
-    if "HTTP2" in supports_http2.upper():
-        curl_cmd.append("--http2")
-    else:
-        # 无 HTTP/2 时，HTTP/1.1 下 speed.cloudflare.com 会对 1MB 请求限速，
-        # 这里按需下调单次测速体积，避免固定带宽下必然超时导致全部测速失败。
-        curl_cmd += ["--http1.1"]
-
-    curl_cmd += insecure_flag + [url]   # 动态添加 --insecure（如果是 https）
+    ] + insecure_flag + [url]   # 动态添加 --insecure（如果是 https）
 
     try:
         result = subprocess.run(curl_cmd, capture_output=True, text=True,
